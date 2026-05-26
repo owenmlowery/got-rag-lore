@@ -39,9 +39,6 @@ Three notebooks, run in order:
    side-by-side comparison of hybrid vs. term-only retrieval and a failure-case
    query (out-of-corpus question) to show the model declining cleanly.
 
-HTML renders of each notebook are in [`html/`](./html/) for quick preview
-without running Jupyter.
-
 ## Setup
 
 Prereqs: Python 3.11+, Docker, [Ollama](https://ollama.com).

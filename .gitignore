@@ -28,3 +28,6 @@ nltk_data/
 
 # Anaconda
 anaconda_projects/
+
+# HTML notebook exports (kept locally for easy preview, but .ipynb renders on GitHub)
+html/
