@@ -5,7 +5,7 @@ Wikipedia articles about *A Song of Ice and Fire* / *Game of Thrones*. Hybrid
 BM25 + dense-vector retrieval, local LLM inference, no API keys, no paid
 services.
 
-Built as a course project (Cornell INFO 4614, Information & Data Retrieval),
+Built as a course project (CU Boulder INFO 4614, Information & Data Retrieval),
 then cleaned up for portfolio use.
 
 ## Architecture
