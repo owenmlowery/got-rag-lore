@@ -1,12 +1,15 @@
 # Game of Thrones Lore RAG
 
-A retrieval-augmented question-answering system over ~24k sentences scraped from
-Wikipedia articles about *A Song of Ice and Fire* / *Game of Thrones*. Hybrid
-BM25 + dense-vector retrieval, local LLM inference, no API keys, no paid
-services.
+A retrieval-augmented question-answering system over ~24k sentences scraped
+from Wikipedia articles about *A Song of Ice and Fire* and *Game of Thrones*.
+Hybrid BM25 + dense-vector retrieval, local LLM inference, no paid APIs.
 
-Built as a course project (CU Boulder INFO 4614, Information & Data Retrieval),
-then cleaned up for portfolio use.
+Built as a course project for INFO 4614 (Information & Data Retrieval) at CU
+Boulder, then cleaned up for portfolio use.
+
+**Stack:** `sentence-transformers` (all-MiniLM-L6-v2) · Elasticsearch 9.x (BM25 +
+dense_vector KNN) · Ollama running Llama 3.2 · `wikipedia-api` · NLTK ·
+Jupyter.
 
 ## Architecture
 
@@ -29,22 +32,22 @@ Top-k sentences  →  prompt template  →  Ollama (llama3.2)  →  answer
 
 Three notebooks, run in order:
 
-1. **`01_build_index.ipynb`** — fetches Wikipedia articles, sentence-tokenizes,
-   embeds in batches of 256, bulk-indexes into Elasticsearch with refresh paused
-   during ingest.
-2. **`02_query_demo.ipynb`** — keyword, BM25, KNN, and hybrid queries against
+1. `01_build_index.ipynb` fetches the Wikipedia articles, splits them into
+   sentences, embeds in batches of 256, and bulk-loads them into Elasticsearch
+   with index refresh paused during ingest.
+2. `02_query_demo.ipynb` shows keyword, BM25, KNN, and hybrid queries against
    the index.
-3. **`03_rag_pipeline.ipynb`** — full RAG loop: hybrid retrieval, prompt
-   construction with explicit grounding rules, generation via Ollama. Includes a
-   side-by-side comparison of hybrid vs. term-only retrieval and a failure-case
-   query (out-of-corpus question) to show the model declining cleanly.
+3. `03_rag_pipeline.ipynb` is the full RAG loop: hybrid retrieval, prompt
+   construction, generation via Ollama. It also has a side-by-side comparison
+   of hybrid vs. term-only retrieval and a deliberately-out-of-corpus question
+   used to check that the model declines instead of making things up.
 
 ## Example: hybrid vs. term-only retrieval
 
-Same query against the same index, retrieval strategy swapped. Both runs ask:
+Same query against the same index, swapping retrieval strategy. Both ask:
 **"How did Daenerys Targaryen rise to power?"**
 
-### Hybrid retrieval (BM25 + KNN)
+### Hybrid (BM25 + KNN)
 
 ```
 CONTEXT:
@@ -75,11 +78,11 @@ CONTEXT:
 > **Answer:** Daenerys Targaryen rose to power after the death of her uncle,
 > Tywin Lannister, which upset the balance of power in King's Landing and
 > allowed for the rise of the High Sparrow and the Faith Militant. Her own
-> path to power was aided by a unique circumstance — she had been given three
+> path to power was aided by a unique circumstance: she had been given three
 > dragon eggs as wedding gifts, and upon hatching, these dragons made her a
 > formidable force on her own.
 
-### Term-only retrieval (BM25 only)
+### Term-only (BM25)
 
 ```
 CONTEXT:
@@ -113,29 +116,78 @@ CONTEXT:
 
 ### What this shows
 
-Term-only retrieval returns the same sentence three times in a row —
+The term-only run returns the same sentence three times in a row,
 *"After Daenerys conquers the city she continues to rule it as its queen to
-learn how to rule."* — because three different Wikipedia articles contain that
-exact sentence and BM25 scores each occurrence identically. The model is then
-working with a context window that's effectively 7 unique sentences instead
-of 10.
+learn how to rule,"* because three different Wikipedia articles contain that
+exact sentence and BM25 scores each copy identically. Out of a 10-sentence
+context budget, three slots get wasted on a duplicate. The hybrid run dedupes
+those by score (KNN gives each near-duplicate a slightly different distance)
+and brings in semantically adjacent material the term query misses: the
+Jon-as-heir line, the Targaryen-conquest reference, the "rise in power in
+Essos" sentence. The hybrid answer reflects that wider context, citing both
+the political vacuum and the dragons. The term-only answer mostly recycles the
+dragon eggs.
 
-Hybrid retrieval dedupes those by score (each near-duplicate gets a slightly
-different KNN distance from the query embedding) and pulls in semantically
-adjacent material the term query misses — the Jon-as-heir line, the
-"three-headed dragon" reference, the "rise in power in Essos" sentence — none
-of which share strong keyword overlap with the query.
+## Design choices
 
-The downstream answer reflects this. The hybrid response cites both the
-political vacuum and the dragons; the term-only response leans on the dragons
-plus the duplicated conquering sentence and produces a thinner answer.
+**Hybrid retrieval.** The query is run as a single Elasticsearch `bool` with
+both a `match` clause (BM25 over a porter-stemmed analyzer) and a `knn` clause
+on the dense vector field, both as `should`. BM25 alone misses paraphrases
+and over-rewards near-duplicate sentences. KNN alone misses exact-name
+matches. Running them together and letting Elasticsearch sum the scores is
+about as simple as hybrid retrieval gets, and the worked example above shows
+why it's worth doing.
+
+**Sentence-level chunks.** Splitting articles into sentences keeps each
+retrieved chunk tightly on-topic and lets a 10-result context window cover a
+lot of ground. The trade-off is lost coreference across sentences. A larger
+system would use sliding-window chunks or a hierarchical retriever; this one
+doesn't.
+
+**Grounded prompting.** The system prompt instructs the model to answer only
+from `CONTEXT`, decline when there isn't enough information, and prefix
+responses with `Answer:`. The thing that convinced me this was working was the
+out-of-corpus query about the *Game of Thrones* theme song lyrics. The
+retrieved context was full of unrelated trivia (tourism campaigns, themed
+whiskies). The model could have easily made something up from its
+pre-training. Instead it said:
+
+> Answer: The context provided does not include any information about the
+> lyrics to the Game of Thrones theme song. The information in CONTEXT is
+> limited to general statements about the series' portrayal of medieval
+> realism and its connection to George R.R. Martin's novel series A Song of
+> Ice and Fire, as well as some specific references to tourism campaigns and
+> themed whiskies.
+
+That refusal is a real win for the grounding rules. A 3B model is very
+willing to confabulate when given a question it sort of half-remembers, and
+the rules held.
+
+**Indexing throughput.** Embeddings are batched 256 sentences per
+`model.encode` call. Index refresh is set to `-1` during the bulk insert and
+restored to `1s` after. Without those two changes the initial build takes
+multiple times longer.
+
+## Limitations
+
+- Sentence-level chunking loses cross-sentence coreference.
+- Llama 3.2 (3B) occasionally over-hedges in the other direction and refuses
+  to answer questions the context *does* support. The Jon Snow query in
+  notebook 3 is the clearest case: the context contains "Jon Snow is the
+  bastard son of Eddard Stark" and the model still says it cannot speculate.
+- Some Wikipedia pages redirect to compilation articles. The `Yara Greyjoy`
+  lookup returns ~1,900 sentences because that title redirects to a much
+  larger list page, and several other titles silently 404. A production
+  ingest would resolve canonical URLs first.
+- No reranker, no query rewriting, no eval harness. The hybrid-vs-term
+  comparison in the README is the closest thing to evaluation in the repo.
 
 ## Setup
 
 Prereqs: Python 3.11+, Docker, [Ollama](https://ollama.com).
 
 ```bash
-# 1. Elasticsearch (single-node, with security on)
+# 1. Elasticsearch (single-node, security on)
 docker run -d --name es \
   -p 9200:9200 \
   -e "discovery.type=single-node" \
@@ -156,41 +208,5 @@ cp .env.example .env   # then edit ES_PASSWORD to match the one above
 jupyter lab
 ```
 
-Then execute `01_build_index.ipynb` → `02_query_demo.ipynb` → `03_rag_pipeline.ipynb`.
-The first notebook takes ~5–10 min on a laptop (most of it is sentence embedding).
-
-## Design notes
-
-- **Hybrid retrieval matters.** Pure BM25 returns near-duplicate sentences and
-  misses paraphrases; pure KNN returns semantic neighbors that miss exact-name
-  matches. The bool/should combination scores both. Notebook 3 shows a direct
-  comparison on the same query.
-- **Sentence-level granularity.** Splitting articles into sentences keeps each
-  retrieved chunk tightly on-topic and lets a small context window hold ~10
-  diverse hits. Trade-off: loses some inter-sentence context (a deliberate
-  choice — see "Limitations").
-- **Grounded prompting.** The system prompt enforces answering only from
-  `CONTEXT`, declining when insufficient, and prefixing with `Answer:`. The
-  failure-case query in notebook 3 confirms the model abstains rather than
-  hallucinating from training data.
-- **Indexing throughput.** Embeddings are batched (256 sentences/call); index
-  refresh is paused during bulk insert and restored after.
-
-## Limitations (honest)
-
-- Sentence-level chunking drops cross-sentence coreference. A larger system
-  would use sliding-window chunks or hierarchical retrieval.
-- Llama 3.2 (3B) sometimes over-hedges on context that clearly contains the
-  answer (see the Jon Snow query in notebook 3). A larger model or a
-  reranker would help.
-- Wikipedia article quality varies — some "character" articles are stubs and a
-  few redirects resolve to unrelated content (the `Yara Greyjoy` page returns
-  ~1900 sentences because it redirects to a larger compilation). A production
-  ingest would validate canonical URLs.
-- No reranking, no query rewriting, no eval harness. This is a working pipeline,
-  not a tuned one.
-
-## Stack
-
-`sentence-transformers` · `elasticsearch-py` (KNN + BM25) · `ollama` (llama3.2) ·
-`wikipedia-api` · `nltk` · Jupyter
+Then run `01_build_index.ipynb` → `02_query_demo.ipynb` → `03_rag_pipeline.ipynb`.
+The first notebook takes 5–10 minutes on a laptop, mostly sentence embedding.
