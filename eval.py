@@ -2,7 +2,7 @@
 Retrieval evaluation for the GoT lore RAG index.
 
 Runs each question in test_set.json through three retrieval strategies
-(hybrid, BM25-only, KNN-only) against the `got_lore` Elasticsearch index
+(hybrid, match-only, KNN-only) against the `got_lore` Elasticsearch index
 and reports Recall@10 and MRR per strategy.
 
 Caveats:
@@ -66,7 +66,7 @@ def retrieve_hybrid(client, model, query, k=K):
     return [h["_source"]["sentence"] for h in res["hits"]["hits"]]
 
 
-def retrieve_bm25(client, model, query, k=K):
+def retrieve_match(client, model, query, k=K):
     body = {"query": {"match": {"sentence": query}}, "size": k}
     res = client.search(index=INDEX, body=body)
     return [h["_source"]["sentence"] for h in res["hits"]["hits"]]
@@ -122,7 +122,7 @@ def main():
 
     strategies = {
         "hybrid": retrieve_hybrid,
-        "bm25-only": retrieve_bm25,
+        "match-only": retrieve_match,
         "knn-only": retrieve_knn,
     }
 

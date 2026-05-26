@@ -2,14 +2,14 @@
 
 A retrieval-augmented question-answering system over ~24k sentences scraped
 from Wikipedia articles about *A Song of Ice and Fire* and *Game of Thrones*.
-Hybrid BM25 + dense-vector retrieval, local LLM inference, no paid APIs.
+Hybrid keyword-match + dense-vector retrieval, local LLM inference, no paid APIs.
 
 Built as a course project for INFO 4614 (Information & Data Retrieval) at CU
 Boulder, then cleaned up for portfolio use.
 
-**Stack:** `sentence-transformers` (all-MiniLM-L6-v2) · Elasticsearch 9.x (BM25 +
-dense_vector KNN) · Ollama running Llama 3.2 · `wikipedia-api` · NLTK ·
-Jupyter.
+**Stack:** `sentence-transformers` (all-MiniLM-L6-v2) · Elasticsearch 9.x
+(match query + dense_vector KNN) · Ollama running Llama 3.2 ·
+`wikipedia-api` · NLTK · Jupyter.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Wikipedia (68 articles)
         │  sentence-transformers/all-MiniLM-L6-v2 (384-d)
         ▼
 Elasticsearch index `got_lore`
-  ├─ sentence (text, porter-stemmed analyzer)   → BM25
+  ├─ sentence (text, porter-stemmed analyzer)   → match query
   ├─ embedding (dense_vector, cosine)           → KNN
   └─ doc_title / category (keyword)             → filters
         │
@@ -35,7 +35,7 @@ Three notebooks, run in order:
 1. `01_build_index.ipynb` fetches the Wikipedia articles, splits them into
    sentences, embeds in batches of 256, and bulk-loads them into Elasticsearch
    with index refresh paused during ingest.
-2. `02_query_demo.ipynb` shows keyword, BM25, KNN, and hybrid queries against
+2. `02_query_demo.ipynb` shows keyword, match, KNN, and hybrid queries against
    the index.
 3. `03_rag_pipeline.ipynb` is the full RAG loop: hybrid retrieval, prompt
    construction, generation via Ollama. It also has a side-by-side comparison
@@ -47,7 +47,7 @@ Three notebooks, run in order:
 Same query against the same index, swapping retrieval strategy. Both ask:
 **"How did Daenerys Targaryen rise to power?"**
 
-### Hybrid (BM25 + KNN)
+### Hybrid (match + KNN)
 
 ```
 CONTEXT:
@@ -82,7 +82,7 @@ CONTEXT:
 > dragon eggs as wedding gifts, and upon hatching, these dragons made her a
 > formidable force on her own.
 
-### Term-only (BM25)
+### Term-only (match)
 
 ```
 CONTEXT:
@@ -119,7 +119,7 @@ CONTEXT:
 The term-only run returns the same sentence three times in a row,
 *"After Daenerys conquers the city she continues to rule it as its queen to
 learn how to rule,"* because three different Wikipedia articles contain that
-exact sentence and BM25 scores each copy identically. Out of a 10-sentence
+exact sentence and the match query scores each copy identically. Out of a 10-sentence
 context budget, three slots get wasted on a duplicate. The hybrid run dedupes
 those by score (KNN gives each near-duplicate a slightly different distance)
 and brings in semantically adjacent material the term query misses: the
@@ -138,23 +138,23 @@ relevant if it contains any of a list of expected phrases for that question
 ```
 Strategy      Recall@10    MRR
 hybrid           0.65      0.60
-bm25-only        0.65      0.59
+match-only       0.65      0.59
 knn-only         0.80      0.74
 ```
 
 The results surprised me. The worked example earlier in the README shows
-hybrid producing better-deduplicated context than BM25 alone, and that's
-still true. But on this 20-question set, **KNN-only outperforms hybrid by 15
-points on Recall@10 and 14 points on MRR**, and hybrid is statistically
-indistinguishable from BM25-only.
+hybrid producing better-deduplicated context than the match query alone, and
+that's still true. But on this 20-question set, **KNN-only outperforms hybrid
+by 15 points on Recall@10 and 14 points on MRR**, and hybrid is statistically
+indistinguishable from match-only.
 
 The likely cause is score scaling. The current hybrid query is a `bool` with
 `match` and `knn` as `should` clauses, and Elasticsearch sums their raw
-scores. BM25 scores typically land in the 5–20 range; KNN cosine similarities
-land in 0–1. The BM25 contribution dominates, so "hybrid" is effectively
-BM25 with KNN noise. A real hybrid scorer would normalize the two signals
-(min-max scaling, reciprocal rank fusion, or learned weights) before
-combining. That's the obvious next experiment.
+scores. Match-query scores typically land in the 5–20 range; KNN cosine
+similarities land in 0–1. The match contribution dominates, so "hybrid" is
+effectively the match query with some KNN noise. A real hybrid scorer would
+normalize the two signals (min-max scaling, reciprocal rank fusion, or
+learned weights) before combining. That's the obvious next experiment.
 
 Caveats: 20 questions is not a benchmark; treat the numbers as directional.
 Phrase-based relevance is less precise than hand-labeled sentence ids — a
@@ -163,13 +163,13 @@ sentence that mentions the topic in passing can be counted as relevant.
 ## Design choices
 
 **Hybrid retrieval.** The query is run as a single Elasticsearch `bool` with
-both a `match` clause (BM25 over a porter-stemmed analyzer) and a `knn` clause
+both a `match` clause (over a porter-stemmed analyzer) and a `knn` clause
 on the dense vector field, both as `should`. The intent was to capture both
-exact-name matches (where BM25 excels) and paraphrases (where KNN excels).
-The worked example above shows the dedup benefit on a specific query, but
-the eval above shows that the naive sum-of-raw-scores combination doesn't
-actually beat BM25 across the test set, and underperforms KNN-only. Fixing
-that is the most interesting open problem in the project.
+exact-name matches (where keyword matching excels) and paraphrases (where
+KNN excels). The worked example above shows the dedup benefit on a specific
+query, but the eval above shows that the naive sum-of-raw-scores combination
+doesn't actually beat the match query across the test set, and underperforms
+KNN-only. Fixing that is the most interesting open problem in the project.
 
 **Sentence-level chunks.** Splitting articles into sentences keeps each
 retrieved chunk tightly on-topic and lets a 10-result context window cover a
