@@ -1,0 +1,30 @@
+# Secrets
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.python-version
+
+# Jupyter
+.ipynb_checkpoints/
+.virtual_documents/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Data / models / artifacts
+data/
+*.mp4
+*.zip
+nltk_data/
+
+# Anaconda
+anaconda_projects/
