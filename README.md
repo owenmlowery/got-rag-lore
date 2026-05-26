@@ -128,15 +128,48 @@ Essos" sentence. The hybrid answer reflects that wider context, citing both
 the political vacuum and the dragons. The term-only answer mostly recycles the
 dragon eggs.
 
+## Evaluation
+
+I built a 20-question hand-labeled eval set (`test_set.json`) and ran each
+question through three retrieval strategies. A retrieved sentence is judged
+relevant if it contains any of a list of expected phrases for that question
+(case-insensitive substring match). Run with `python eval.py`.
+
+```
+Strategy      Recall@10    MRR
+hybrid           0.65      0.60
+bm25-only        0.65      0.59
+knn-only         0.80      0.74
+```
+
+The results surprised me. The worked example earlier in the README shows
+hybrid producing better-deduplicated context than BM25 alone, and that's
+still true. But on this 20-question set, **KNN-only outperforms hybrid by 15
+points on Recall@10 and 14 points on MRR**, and hybrid is statistically
+indistinguishable from BM25-only.
+
+The likely cause is score scaling. The current hybrid query is a `bool` with
+`match` and `knn` as `should` clauses, and Elasticsearch sums their raw
+scores. BM25 scores typically land in the 5–20 range; KNN cosine similarities
+land in 0–1. The BM25 contribution dominates, so "hybrid" is effectively
+BM25 with KNN noise. A real hybrid scorer would normalize the two signals
+(min-max scaling, reciprocal rank fusion, or learned weights) before
+combining. That's the obvious next experiment.
+
+Caveats: 20 questions is not a benchmark; treat the numbers as directional.
+Phrase-based relevance is less precise than hand-labeled sentence ids — a
+sentence that mentions the topic in passing can be counted as relevant.
+
 ## Design choices
 
 **Hybrid retrieval.** The query is run as a single Elasticsearch `bool` with
 both a `match` clause (BM25 over a porter-stemmed analyzer) and a `knn` clause
-on the dense vector field, both as `should`. BM25 alone misses paraphrases
-and over-rewards near-duplicate sentences. KNN alone misses exact-name
-matches. Running them together and letting Elasticsearch sum the scores is
-about as simple as hybrid retrieval gets, and the worked example above shows
-why it's worth doing.
+on the dense vector field, both as `should`. The intent was to capture both
+exact-name matches (where BM25 excels) and paraphrases (where KNN excels).
+The worked example above shows the dedup benefit on a specific query, but
+the eval above shows that the naive sum-of-raw-scores combination doesn't
+actually beat BM25 across the test set, and underperforms KNN-only. Fixing
+that is the most interesting open problem in the project.
 
 **Sentence-level chunks.** Splitting articles into sentences keeps each
 retrieved chunk tightly on-topic and lets a 10-result context window cover a

@@ -1,0 +1,82 @@
+[
+  {
+    "question": "Who killed Robb Stark?",
+    "relevant_phrases": ["red wedding", "roose", "frey", "betray"]
+  },
+  {
+    "question": "What dragons does Daenerys Targaryen have?",
+    "relevant_phrases": ["drogon", "rhaegal", "viserion", "three dragons", "three-headed dragon"]
+  },
+  {
+    "question": "What happened at the Red Wedding?",
+    "relevant_phrases": ["red wedding"]
+  },
+  {
+    "question": "Who portrayed Jon Snow in the television series?",
+    "relevant_phrases": ["kit harington"]
+  },
+  {
+    "question": "What is the seat of House Stark?",
+    "relevant_phrases": ["winterfell"]
+  },
+  {
+    "question": "What is the sigil of House Lannister?",
+    "relevant_phrases": ["lion", "golden lion"]
+  },
+  {
+    "question": "Who is the leader of the Faith Militant?",
+    "relevant_phrases": ["high sparrow", "faith militant"]
+  },
+  {
+    "question": "What are direwolves?",
+    "relevant_phrases": ["direwolf"]
+  },
+  {
+    "question": "Where is the Wall and what is its purpose?",
+    "relevant_phrases": ["night's watch", "wildlings", "north of the wall"]
+  },
+  {
+    "question": "Who is Brienne of Tarth?",
+    "relevant_phrases": ["brienne", "tarth"]
+  },
+  {
+    "question": "What is the relationship between Cersei and Jaime Lannister?",
+    "relevant_phrases": ["twin", "incest", "lover", "brother"]
+  },
+  {
+    "question": "Who killed Joffrey Baratheon?",
+    "relevant_phrases": ["poison", "olenna", "purple wedding"]
+  },
+  {
+    "question": "Who wrote A Song of Ice and Fire?",
+    "relevant_phrases": ["george r. r. martin", "george martin"]
+  },
+  {
+    "question": "Who is Tyrion Lannister?",
+    "relevant_phrases": ["tyrion", "imp", "dwarf"]
+  },
+  {
+    "question": "What is Casterly Rock?",
+    "relevant_phrases": ["casterly"]
+  },
+  {
+    "question": "What is Petyr Baelish's nickname?",
+    "relevant_phrases": ["littlefinger"]
+  },
+  {
+    "question": "What is Valyrian steel?",
+    "relevant_phrases": ["valyrian steel", "valyria"]
+  },
+  {
+    "question": "Who is Khal Drogo?",
+    "relevant_phrases": ["drogo", "khalasar", "dothraki"]
+  },
+  {
+    "question": "What is the Iron Throne?",
+    "relevant_phrases": ["iron throne", "swords", "seven kingdoms"]
+  },
+  {
+    "question": "Who is the Mother of Dragons?",
+    "relevant_phrases": ["daenerys", "mother of dragons", "khaleesi"]
+  }
+]
