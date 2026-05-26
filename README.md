@@ -39,6 +39,97 @@ Three notebooks, run in order:
    side-by-side comparison of hybrid vs. term-only retrieval and a failure-case
    query (out-of-corpus question) to show the model declining cleanly.
 
+## Example: hybrid vs. term-only retrieval
+
+Same query against the same index, retrieval strategy swapped. Both runs ask:
+**"How did Daenerys Targaryen rise to power?"**
+
+### Hybrid retrieval (BM25 + KNN)
+
+```
+CONTEXT:
+ * Tywin's death upsets the balance of power in King's Landing, namely by
+   allowing the rise to power of the High Sparrow and the Faith Militant.
+ * The Prince discusses the use of amoral ways and "how to do wrong" to gain power.
+ * Her rise to power is aided by the historic birth of three dragons, hatched
+   from eggs given to her as wedding gifts.
+ * Tyrion arrives in Pentos, where Varys reveals that he has been conspiring to
+   restore House Targaryen to power, and asks Tyrion to journey with him to
+   meet Daenerys Targaryen in Meereen.
+ * Petyr helps Eddard expose the secret parentage of the royal children, but
+   advises him to abet Joffrey's rise to power in order to consolidate their own.
+ * Later, she conquers Yunkai and Meereen, the latter Daenerys settles in to
+   learn how to rule.
+ * After Daenerys conquers the city she continues to rule it as its queen to
+   learn how to rule.
+ * The season also features other storylines: Daenerys Targaryen begins her
+   rise in power in Essos; Ned's illegitimate son, Jon Snow, goes undercover
+   beyond the Wall; ... and all of Westeros is informed of the reawakened
+   threat of the Army of the Dead.
+ * It doesn't mean that she's insincere in her genuine hope to do charitable
+   work and it's just an interesting new comment on how you handle the masses
+   and how you win power that maybe we haven't seen in Westeros before.
+ * Daenerys realizes this makes Jon the heir to House Targaryen.
+```
+
+> **Answer:** Daenerys Targaryen rose to power after the death of her uncle,
+> Tywin Lannister, which upset the balance of power in King's Landing and
+> allowed for the rise of the High Sparrow and the Faith Militant. Her own
+> path to power was aided by a unique circumstance — she had been given three
+> dragon eggs as wedding gifts, and upon hatching, these dragons made her a
+> formidable force on her own.
+
+### Term-only retrieval (BM25 only)
+
+```
+CONTEXT:
+ * Tywin's death upsets the balance of power in King's Landing, namely by
+   allowing the rise to power of the High Sparrow and the Faith Militant.
+ * The Prince discusses the use of amoral ways and "how to do wrong" to gain power.
+ * Her rise to power is aided by the historic birth of three dragons, hatched
+   from eggs given to her as wedding gifts.
+ * Tyrion arrives in Pentos, where Varys reveals that he has been conspiring to
+   restore House Targaryen to power, and asks Tyrion to journey with him to
+   meet Daenerys Targaryen in Meereen.
+ * Petyr helps Eddard expose the secret parentage of the royal children, but
+   advises him to abet Joffrey's rise to power in order to consolidate their own.
+ * Later, she conquers Yunkai and Meereen, the latter Daenerys settles in to
+   learn how to rule.
+ * After Daenerys conquers the city she continues to rule it as its queen to
+   learn how to rule.
+ * After Daenerys conquers the city she continues to rule it as its queen to
+   learn how to rule.
+ * After Daenerys conquers the city she continues to rule it as its queen to
+   learn how to rule.
+ * The season also features other storylines: Daenerys Targaryen begins her
+   rise in power in Essos; ...
+```
+
+> **Answer:** Daenerys Targaryen's rise to power was aided by the historic
+> birth of three dragons, hatched from eggs given to her as wedding gifts.
+> After acquiring these dragon eggs, she became known for her bravery and
+> determination, eventually conquering Yunkai and Meereen, the latter being a
+> city where she settled to learn how to rule.
+
+### What this shows
+
+Term-only retrieval returns the same sentence three times in a row —
+*"After Daenerys conquers the city she continues to rule it as its queen to
+learn how to rule."* — because three different Wikipedia articles contain that
+exact sentence and BM25 scores each occurrence identically. The model is then
+working with a context window that's effectively 7 unique sentences instead
+of 10.
+
+Hybrid retrieval dedupes those by score (each near-duplicate gets a slightly
+different KNN distance from the query embedding) and pulls in semantically
+adjacent material the term query misses — the Jon-as-heir line, the
+"three-headed dragon" reference, the "rise in power in Essos" sentence — none
+of which share strong keyword overlap with the query.
+
+The downstream answer reflects this. The hybrid response cites both the
+political vacuum and the dragons; the term-only response leans on the dragons
+plus the duplicated conquering sentence and produces a thinner answer.
+
 ## Setup
 
 Prereqs: Python 3.11+, Docker, [Ollama](https://ollama.com).
